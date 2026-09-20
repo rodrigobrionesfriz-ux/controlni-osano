@@ -72,7 +72,7 @@ h1,h2,h3{font-family:var(--f-display);font-weight:700;margin:0;letter-spacing:-.
 h1{font-size:28px} h2{font-size:21px} h3{font-size:17px}
 p{margin:0}
 :focus-visible{outline:3px solid var(--plum);outline-offset:2px;border-radius:6px}
-#app{max-width:680px;margin:0 auto;padding:18px 16px 118px}
+#app{max-width:680px;margin:0 auto;padding:14px 16px 190px}
 .vh{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px}
 .vh h1{flex:1;min-width:0}
 .muted{color:var(--muted)} .small{font-size:13.5px} .tiny{font-size:12px}
@@ -198,7 +198,7 @@ p{margin:0}
 .next{background:var(--teal-soft);border-radius:14px;padding:12px 14px;margin-bottom:10px;color:var(--teal);font-weight:600}
 
 /* Nav */
-nav.bar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);box-shadow:var(--shadow);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+nav.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line);padding:4px 6px}
 nav.bar .in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:2px}
 nav.bar button{appearance:none;border:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0 2px;font-size:11.5px;font-weight:600;cursor:pointer;min-height:52px;border-radius:12px}
 nav.bar button .ic{width:52px;height:30px;border-radius:99px;display:grid;place-items:center}
@@ -207,9 +207,9 @@ nav.bar button[aria-current="page"] .ic{background:var(--plum-soft)}
 nav.bar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 
 /* Sheet */
-.sheet-wrap{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet-wrap{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:14px}
 .scrim{position:absolute;inset:0;background:rgba(20,14,28,.5)}
-.sheet{position:relative;background:var(--bg);width:100%;max-width:680px;max-height:92%;overflow-y:auto;border-radius:22px 22px 0 0;padding:14px 16px calc(24px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+.sheet{position:relative;background:var(--bg);width:100%;max-width:680px;max-height:80%;overflow-y:auto;border-radius:22px;padding:14px 16px 22px;animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion: reduce){.sheet{animation:none}}
 .sheet .grab{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
@@ -232,7 +232,7 @@ nav.bar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.
 .empty{text-align:center;padding:26px 18px;color:var(--muted)}
 .empty b{display:block;color:var(--ink);font-family:var(--f-display);font-size:19px;margin-bottom:4px}
 .empty .btn{margin-top:14px}
-#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:70;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:90%;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(72px + env(safe-area-inset-top,0px));z-index:70;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:90%;opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.on{opacity:1}
 .load{padding:80px 0;text-align:center;color:var(--muted)}
 
@@ -274,8 +274,8 @@ body.locked nav.bar{display:none}
 </style>
 </head>
 <body>
-<div id="app" aria-live="polite"><div class="load">Cargando...</div></div>
 <nav class="bar" aria-label="Secciones"><div class="in" id="nav"></div></nav>
+<div id="app" aria-live="polite"><div class="load">Cargando...</div></div>
 <div id="toast" role="status"></div>
 <noscript>Esta app necesita JavaScript.</noscript>
 
