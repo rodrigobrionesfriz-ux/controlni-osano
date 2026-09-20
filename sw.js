@@ -1,6 +1,6 @@
 /* Service worker: permite instalar la app y abrirla sin conexión.
    Los datos van por Firestore, que tiene su propia caché sin conexión. */
-const VERSION = 'controles-v4';
+const VERSION = 'controles-v5';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 const CACHEABLE_HOSTS = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 

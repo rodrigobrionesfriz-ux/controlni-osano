@@ -405,7 +405,7 @@ const BASE = ['ninos', 'principal'];   /* ninos/principal = perfil; subcoleccion
 const LS_KEY = 'controles_crecimiento_v1';
 const S = {
   ready: false, mode: 'local', auth: 'loading', user: null, profile: null, measurements: [], illnesses: [], visits: [], teeth: {},
-  tab: 'resumen', chart: {ind: 'wfa', mode: 'lines', range: null, sel: null}, ctlView: 'cards', tbl: 'all', installEvt: null, dl: null
+  tab: 'resumen', chart: {ind: 'wfa', mode: 'lines', range: null, sel: null}, ctlView: 'cards', quick: false, tbl: 'all', installEvt: null, dl: null
 };
 let FB = null, DB = null, unsubs = [], chartDown = false;
 
@@ -421,12 +421,11 @@ function lsSave() {
 function ref(path) {
   const {db, fs} = FB;
   if (path === 'profile/main') return fs.doc(db, ...BASE);
-  if (path === 'teeth/all') return fs.doc(db, ...BASE, 'extras', 'teeth');
   return fs.doc(db, ...BASE, ...path.split('/'));
 }
 function dbFail(e) {
   console.error(e);
-  toast(e && e.code === 'permission-denied' ? 'Tu cuenta no tiene permiso para guardar.' : 'No se pudo guardar. Se reintentará al volver la conexión.');
+  toast(e && e.code === 'permission-denied' ? 'Sin permiso para guardar (revisa las reglas de Firestore).' : 'No se pudo guardar (' + ((e && e.code) || 'error') + ').');
 }
 async function dbSet(path, data) { try { await FB.fs.setDoc(ref(path), clone(data)); } catch (e) { dbFail(e); } }
 async function dbDel(path) { try { await FB.fs.deleteDoc(ref(path)); } catch (e) { dbFail(e); } }
@@ -439,7 +438,17 @@ async function delDoc(coll, id) {
   S[coll] = S[coll].filter(x => x.id !== id); render();
   if (DB) await dbDel(coll + '/' + id); else lsSave();
 }
-async function saveTeeth() { render(); if (DB) await dbSet('teeth/all', {map: S.teeth}); else lsSave(); }
+const toothRef = code => FB.fs.doc(FB.db, ...BASE, 'teeth', code);
+async function saveTeethMany(codes) {
+  render();
+  if (!DB) { lsSave(); return; }
+  try {
+    const b = FB.fs.writeBatch(FB.db);
+    codes.forEach(c => { if (S.teeth[c]) b.set(toothRef(c), clone(S.teeth[c])); else b.delete(toothRef(c)); });
+    await b.commit();
+  } catch (e) { dbFail(e); }
+}
+const saveTooth = code => saveTeethMany([code]);
 async function saveProfile() { render(); if (DB) await dbSet('profile/main', S.profile); else lsSave(); }
 
 function stopSync() { unsubs.forEach(u => { try { u(); } catch (e) {} }); unsubs = []; }
@@ -450,7 +459,7 @@ function startSync() {
   const err = e => { console.error(e); if (e && e.code === 'permission-denied') { S.auth = 'denied'; S.ready = true; stopSync(); DB = null; render(); } };
   const sub = (name, key) => fs.onSnapshot(fs.collection(db, ...BASE, name), snap => { S[key] = snap.docs.map(d => Object.assign({}, d.data(), {id: d.id})); render(); }, err);
   unsubs.push(sub('measurements', 'measurements'), sub('illnesses', 'illnesses'), sub('visits', 'visits'));
-  unsubs.push(fs.onSnapshot(fs.doc(db, ...BASE, 'extras', 'teeth'), s => { S.teeth = s.exists() ? (s.data().map || {}) : {}; render(); }, err));
+  unsubs.push(fs.onSnapshot(fs.collection(db, ...BASE, 'teeth'), snap => { const t = {}; snap.docs.forEach(d => { t[d.id] = d.data(); }); S.teeth = t; render(); }, err));
   unsubs.push(fs.onSnapshot(fs.doc(db, ...BASE), s => {
     if (s.exists()) { S.profile = s.data(); S.ready = true; }
     else if (!s.metadata.fromCache) { S.profile = null; S.ready = true; }
@@ -884,7 +893,8 @@ function vDientes() {
     <div class="jaw"><div class="jawlabel"><span>Derecha</span><span>Arriba</span><span>Izquierda</span></div>${archHTML(ARCH_UP, false)}</div>
     <div class="jaw"><div class="jawlabel"><span>Derecha</span><span>Abajo</span><span>Izquierda</span></div>${archHTML(ARCH_LO, true)}</div>
     <div class="legend"><span><i style="border:2px solid var(--plum);background:var(--tooth-out)"></i>Ya salió</span><span><i style="border:2px dashed var(--ref)"></i>Aún no</span><span><i style="border:2px dotted var(--muted)"></i>Se cayó</span><span><i style="background:var(--amber);border-radius:50%"></i>Con nota</span></div>
-    ${outN + lostN < 20 ? `<div class="actions" style="margin-top:12px"><button class="btn sm" data-act="all-teeth">Marcar todos como salidos</button></div>` : ''}</section>`;
+    <div class="actions" style="margin-top:12px">${outN + lostN < 20 ? `<button class="btn sm" data-act="all-teeth">Marcar todos como salidos</button>` : ''}<button class="btn sm ${S.quick ? 'primary' : ''}" data-act="quick">${S.quick ? 'Listo' : 'Marcar varios'}</button></div>
+    ${S.quick ? '<p class="small" style="margin-top:10px;color:var(--plum);font-weight:600">Modo rápido: toca cada diente que ya salió. Toca de nuevo para desmarcarlo.</p>' : ''}</section>`;
   const nx = S.visits.filter(v => v.next && v.next >= today).sort((a, c) => a.next < c.next ? -1 : 1)[0];
   if (nx) h += `<div class="next">Próxima cita dental: ${fmtDate(nx.next, {weekday: 'long'})}${nx.place ? ', ' + esc(nx.place) : ''}</div>`;
   h += `<div class="sect">Visitas al dentista</div>`;
@@ -1049,7 +1059,7 @@ function openTooth(code) {
     const note = F(f,'note').value.trim();
     if (!st && !note) delete S.teeth[code]; else S.teeth[code] = {st: st || 'none', date: st ? F(f,'date').value : '', note};
     if (S.teeth[code] && S.teeth[code].st === 'none') S.teeth[code].st = '';
-    closeSheet(); S._keepScroll = true; saveTeeth(); toast('Diente guardado');
+    closeSheet(); S._keepScroll = true; saveTooth(code); toast('Diente guardado');
   });
 }
 const VTYPES = ['Control', 'Limpieza', 'Barniz de flúor', 'Caries u obturación', 'Urgencia', 'Otro'];
@@ -1102,7 +1112,7 @@ async function importText(text) {
     if (j.profile) S.profile = j.profile;
     (j.measurements || []).forEach(m => upsert(S.measurements, m)); (j.illnesses || []).forEach(m => upsert(S.illnesses, m)); (j.visits || []).forEach(m => upsert(S.visits, m));
     if (j.teeth) Object.assign(S.teeth, j.teeth);
-    if (DB) { if (S.profile) await dbSet('profile/main', S.profile); for (const c of ['measurements', 'illnesses', 'visits']) for (const o of S[c]) await dbSet(c + '/' + o.id, o); await dbSet('teeth/all', {map: S.teeth}); } else lsSave();
+    if (DB) { if (S.profile) await dbSet('profile/main', S.profile); for (const c of ['measurements', 'illnesses', 'visits']) for (const o of S[c]) await dbSet(c + '/' + o.id, o); await saveTeethMany(Object.keys(S.teeth)); } else lsSave();
     render(); toast('Copia importada'); return;
   }
   const rows = parseCSV(text); let name = null, bd = null, inTable = false; const list = [];
@@ -1137,8 +1147,14 @@ document.addEventListener('click', ev => {
     case 'edit-ill': openIllness(el.dataset.id); break;
     case 'new-visit': openVisit(); break;
     case 'edit-visit': openVisit(el.dataset.id); break;
-    case 'tooth': openTooth(el.dataset.code); break;
-    case 'all-teeth': ARCH_UP.concat(ARCH_LO).forEach(c => { if (!S.teeth[c]) S.teeth[c] = {st: 'out', date: '', note: ''}; }); S._keepScroll = true; saveTeeth(); toast('Dientes marcados'); break;
+    case 'tooth': {
+      const c = el.dataset.code;
+      if (S.quick) { if (S.teeth[c] && S.teeth[c].st === 'out' && !S.teeth[c].note) delete S.teeth[c]; else if (!S.teeth[c]) S.teeth[c] = {st: 'out', date: '', note: ''}; S._keepScroll = true; saveTooth(c); }
+      else openTooth(c);
+      break;
+    }
+    case 'quick': S.quick = !S.quick; S._keepScroll = true; render(); break;
+    case 'all-teeth': { const ch = []; ARCH_UP.concat(ARCH_LO).forEach(c => { if (!S.teeth[c]) { S.teeth[c] = {st: 'out', date: '', note: ''}; ch.push(c); } }); S._keepScroll = true; saveTeethMany(ch); toast('Dientes marcados'); break; }
     case 'ind': {
       const i = INDX[el.dataset.ind]; S.chart.ind = i.id;
       if (i.kind === 'len') { const l = latestFor(i); S.chart.range = (l && l.age >= 24) ? '2-5' : '0-2'; }

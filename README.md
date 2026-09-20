@@ -42,7 +42,7 @@ ninos/principal                      perfil (name, birth, sex)
 ninos/principal/measurements/{id}    controles de peso, talla y cabeza
 ninos/principal/illnesses/{id}       enfermedades con medicamentos
 ninos/principal/visits/{id}          visitas al dentista
-ninos/principal/extras/teeth         dientes de leche
+ninos/principal/teeth/{codigo}          un documento por diente de leche
 ```
 
 ## Notas
