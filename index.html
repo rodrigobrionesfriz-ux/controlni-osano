@@ -156,6 +156,7 @@ p{margin:0}
 .ctl .col .n{font-family:var(--f-display);font-weight:700;font-size:19px}
 .ctl .col .n small{font-family:var(--f-body);font-weight:500;font-size:12px;color:var(--muted);margin-left:2px}
 .ctl .col .pill{margin-top:3px;font-size:12px;padding:1px 8px}
+.ctl .care{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-bottom:8px}
 .ctl .flag{margin-top:8px;font-size:13px;color:var(--amber)}
 .ctl .nt{margin-top:8px;font-size:14px;color:var(--muted)}
 .dataactions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -249,6 +250,7 @@ table.rep tbody th{position:sticky;left:0;background:var(--surface);text-align:l
 table.rep thead th:first-child{position:sticky;left:0;z-index:2;text-align:left}
 table.rep tr.yr th{background:var(--surface2);font-size:12.5px;color:var(--muted);text-align:left;position:static;border-right:0}
 table.rep tbody tr:last-child td,table.rep tbody tr:last-child th{border-bottom:0}
+table.rep.wrap td{white-space:normal;text-align:left;min-width:110px}
 table.rep .sub{display:block;font-weight:400;font-size:12px;color:var(--muted)}
 table.rep .u{color:var(--muted);font-size:12px}
 table.rep .pc{display:block;font-size:12.5px;font-weight:700}
@@ -735,6 +737,11 @@ function vCurvas() {
       ${legend}<div class="chartwrap">${chartSVG(ind, c)}</div><div id="readout"></div></section>
     <p class="note">${help} ${notes.join(' ')}</p>`;
 }
+function careHTML(m) {
+  const who = [m.place, m.doctor].filter(Boolean).map(esc).join(', ');
+  if (!m.reason && !who) return '';
+  return `<div class="care">${m.reason ? `<span class="pill tone-ok">${esc(m.reason)}</span>` : ''}${who ? `<span class="small">${who}</span>` : ''}</div>`;
+}
 function flagsFor(m, prev) {
   if (!prev) return '';
   const f = [];
@@ -771,13 +778,23 @@ function tableInd(ind, ms, b) {
   });
   return `<div class="tablewrap"><table class="rep"><thead><tr><th>Fecha</th><th>Edad</th><th>${ind.short === 'Peso/talla' ? 'Peso' : ind.short}</th>${isW ? '<th>Talla</th>' : ''}<th>Percentil</th><th>z</th><th>Estado</th><th>Cambio</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+function tableCare(ms, b) {
+  const rows = ms.filter(m => m.reason || m.place || m.doctor || m.notes);
+  if (!rows.length) return `<div class="card empty">Aún no hay controles con motivo, establecimiento o doctor. Agrégalos al editar cada control.</div>`;
+  let cur = '', out = '';
+  rows.forEach(m => {
+    const y = m.date.slice(0, 4); if (y !== cur) { cur = y; out += `<tr class="yr"><th colspan="5">${y}</th></tr>`; }
+    out += `<tr><th scope="row">${shortDate(m.date)}<span class="sub">${ageText(b, m.date)}</span></th><td>${esc(m.reason || '-')}</td><td>${esc(m.place || '-')}</td><td>${esc(m.doctor || '-')}</td><td>${esc(m.notes || '')}</td></tr>`;
+  });
+  return `<div class="tablewrap"><table class="rep wrap"><thead><tr><th>Fecha</th><th>Motivo</th><th>Establecimiento</th><th>Doctor</th><th>Notas</th></tr></thead><tbody>${out}</tbody></table></div>`;
+}
 function vReport() {
   const b = birth(), ms = sortedM();
   if (!b || !ms.length) return `<div class="card empty"><b>Sin controles todavía</b>Agrega el primero o importa tus datos desde un archivo CSV.</div>`;
-  const chips = [['all', 'Resumen']].concat(IND.map(i => [i.id, i.short])).map(([k, l]) => `<button class="chip" aria-pressed="${S.tbl === k}" data-act="tbl" data-t="${k}">${l}</button>`).join('');
-  const t = S.tbl === 'all' ? tableSummary(ms, b) : tableInd(INDX[S.tbl], ms, b);
+  const chips = [['all', 'Resumen']].concat(IND.map(i => [i.id, i.short])).concat([['care', 'Atención']]).map(([k, l]) => `<button class="chip" aria-pressed="${S.tbl === k}" data-act="tbl" data-t="${k}">${l}</button>`).join('');
+  const t = S.tbl === 'all' ? tableSummary(ms, b) : S.tbl === 'care' ? tableCare(ms, b) : tableInd(INDX[S.tbl], ms, b);
   return `<div class="chips" aria-label="Tabla">${chips}</div>${t}
-    <p class="note">Cada porcentaje es el percentil OMS de ese dato. Verde: dentro de lo esperado, ámbar: algo fuera del promedio, rojo: requiere atención junto al pediatra. Desliza la tabla hacia los lados para ver todas las columnas.</p>
+    <p class="note">${S.tbl === 'care' ? 'Desliza la tabla hacia los lados para ver todas las columnas. Edita cada control para completar motivo, establecimiento y doctor.' : 'Cada porcentaje es el percentil OMS de ese dato. Verde: dentro de lo esperado, ámbar: algo fuera del promedio, rojo: requiere atención junto al pediatra. Desliza la tabla hacia los lados para ver todas las columnas.'}</p>
     <div class="dataactions"><button class="btn" data-act="export-report">Exportar reporte (CSV)</button><button class="btn primary" data-act="print">Imprimir o guardar PDF</button></div>`;
 }
 function vControles() {
@@ -792,7 +809,7 @@ function vControles() {
       const cell = (ind, key, unit) => { const e = b ? evalPoint(ind, m, b) : null; return `<div class="col"><div class="n">${m[key] != null ? fmt(m[key], key === 'weight' ? 3 : 1) : '-'}<small>${m[key] != null ? unit : ''}</small></div>${e ? pillHTML(e) : ''}</div>`; };
       h += `<button class="ctl" data-act="edit-control" data-id="${m.id}"><div class="top"><span class="date">${fmtDate(m.date)}</span><span class="small muted">${b ? ageText(b, m.date) : ''}</span></div>
         <div class="cols">${cell(INDX.wfa, 'weight', 'kg')}${cell(INDX.lhfa, 'height', 'cm')}${cell(INDX.hcfa, 'head', 'cm')}</div>
-        ${flagsFor(m, prevOf[m.id])}${m.notes ? `<div class="nt">${esc(m.notes)}</div>` : ''}</button>`;
+        ${careHTML(m)}${flagsFor(m, prevOf[m.id])}${m.notes ? `<div class="nt">${esc(m.notes)}</div>` : ''}</button>`;
     });
     h += `<p class="note">Cada etiqueta P muestra el percentil OMS de ese dato: peso, talla y perímetro de la cabeza para la edad.</p>`;
   }
@@ -806,10 +823,10 @@ function vControles() {
 function exportReportCSV() {
   const b = birth(), ms = sortedM(), q = (ind, m) => evalPoint(ind, m, b);
   const c = (v, d) => v == null ? '' : fixed(v, d);
-  const head = ['Fecha', 'Edad (meses)', 'Peso (kg)', 'Peso percentil', 'Peso z', 'Talla (cm)', 'Talla percentil', 'Talla z', 'Cabeza (cm)', 'Cabeza percentil', 'Cabeza z', 'IMC', 'IMC percentil', 'IMC z', 'Peso/talla percentil', 'Peso/talla z'];
+  const head = ['Fecha', 'Edad (meses)', 'Peso (kg)', 'Peso percentil', 'Peso z', 'Talla (cm)', 'Talla percentil', 'Talla z', 'Cabeza (cm)', 'Cabeza percentil', 'Cabeza z', 'IMC', 'IMC percentil', 'IMC z', 'Peso/talla percentil', 'Peso/talla z', 'Motivo', 'Establecimiento', 'Doctor', 'Notas'];
   const rows = ms.map(m => {
     const w = q(INDX.wfa, m), h = q(INDX.lhfa, m), k = q(INDX.hcfa, m), i = q(INDX.bmifa, m), t = q(INDX.wfl, m);
-    return [m.date, c(ageMonths(b, m.date), 1), c(m.weight, 3), w ? c(w.p, 1) : '', w ? c(w.z, 2) : '', c(m.height, 1), h ? c(h.p, 1) : '', h ? c(h.z, 2) : '', c(m.head, 1), k ? c(k.p, 1) : '', k ? c(k.z, 2) : '', i ? c(i.v, 1) : '', i ? c(i.p, 1) : '', i ? c(i.z, 2) : '', t ? c(t.p, 1) : '', t ? c(t.z, 2) : ''].join(';');
+    return [m.date, c(ageMonths(b, m.date), 1), c(m.weight, 3), w ? c(w.p, 1) : '', w ? c(w.z, 2) : '', c(m.height, 1), h ? c(h.p, 1) : '', h ? c(h.z, 2) : '', c(m.head, 1), k ? c(k.p, 1) : '', k ? c(k.z, 2) : '', i ? c(i.v, 1) : '', i ? c(i.p, 1) : '', i ? c(i.z, 2) : '', t ? c(t.p, 1) : '', t ? c(t.z, 2) : '', m.reason || '', m.place || '', m.doctor || '', (m.notes || '').replace(/[;\n]/g, ' ')].join(';');
   });
   return '\uFEFF' + [head.join(';')].concat(rows).join('\n') + '\n';
 }
@@ -822,7 +839,7 @@ function printReport() {
   }).join('');
   root.innerHTML = `<h1>Reporte de crecimiento</h1><p>${esc(S.profile.name || '')}, nacida el ${fmtDate(b)}. Edad al emitir: ${ageText(b, todayISO())}. Emitido el ${fmtDate(todayISO())}.</p>
     <p class="small">Referencia: patrones de crecimiento infantil OMS 2006, niñas. Líneas: percentiles 3/97, 5/95, 10/90, 25/75 y 50. Guía de seguimiento, no reemplaza el control con el pediatra.</p>
-    <h2>Controles</h2>${tableSummary(ms, b)}${charts}`;
+    <h2>Controles</h2>${tableSummary(ms, b)}${ms.some(m => m.reason || m.place || m.doctor) ? '<h2>Atención</h2>' + tableCare(ms, b) : ''}${charts}`;
   document.body.appendChild(root); document.body.classList.add('printing');
   const done = () => { document.body.classList.remove('printing'); root.remove(); render(); window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
@@ -968,11 +985,17 @@ function openProfile(first) {
   });
 }
 
-function measureFromForm(f) { return {date: F(f,'date').value, weight: num(F(f,'weight').value), height: num(F(f,'height').value), head: num(F(f,'head').value), notes: F(f,'notes').value.trim()}; }
+function measureFromForm(f) { return {date: F(f,'date').value, weight: num(F(f,'weight').value), height: num(F(f,'height').value), head: num(F(f,'head').value), notes: F(f,'notes').value.trim(), reason: F(f,'reason').value.trim(), place: F(f,'place').value.trim(), doctor: F(f,'doctor').value.trim()}; }
 function updatePreview(f) {
   const m = measureFromForm(f), b = birth(), out = [];
   if (b && m.date) IND.forEach(ind => { const e = evalPoint(ind, Object.assign({id: 'x'}, m), b); if (e) { const zn = zone(e.z); out.push(`<div class="line"><span>${ind.name}: <b>${fixed(e.v, ind.dec)} ${ind.unit}</b></span><span class="pill tone-${zn.tone}">P${pctText(e.p)}</span></div>`); } });
   $('#preview').innerHTML = out.join('');
+}
+const REASONS = ['Control sano', 'Control de crecimiento', 'Control de enfermedad', 'Vacunación', 'Control de seguimiento', 'Urgencia', 'Otro'];
+function uniqueVals(key) {
+  const n = {};
+  S.measurements.concat(key === 'place' ? S.illnesses : []).forEach(x => { const v = (x[key] || '').trim(); if (v) n[v] = (n[v] || 0) + 1; });
+  return Object.keys(n).sort((a, b) => n[b] - n[a]);
 }
 function openControl(id) {
   const m = id ? S.measurements.find(x => x.id === id) : null, b = birth();
@@ -981,8 +1004,13 @@ function openControl(id) {
     <div class="row3"><label class="fld">Peso (kg)<input name="weight" inputmode="decimal" placeholder="13,7" value="${m && m.weight != null ? fmt(m.weight, 3) : ''}"></label>
     <label class="fld">Talla (cm)<input name="height" inputmode="decimal" placeholder="95" value="${m && m.height != null ? fmt(m.height, 1) : ''}"></label>
     <label class="fld">Cabeza (cm)<input name="head" inputmode="decimal" placeholder="49" value="${m && m.head != null ? fmt(m.head, 1) : ''}"></label></div>
+    <div id="preview" class="preview" aria-live="polite"></div>
+    <label class="fld">Motivo del control<input name="reason" list="dl-reason" placeholder="Ej: Control sano" value="${m ? esc(m.reason || '') : ''}"></label>
+    <label class="fld">Establecimiento<input name="place" list="dl-place" placeholder="Ej: CESFAM, clínica o consulta" value="${m ? esc(m.place || '') : ''}"></label>
+    <label class="fld">Doctor o pediatra<input name="doctor" list="dl-doctor" placeholder="Nombre de quien la atendió" value="${m ? esc(m.doctor || '') : ''}"></label>
     <label class="fld">Notas<textarea name="notes" rows="2" placeholder="Opcional">${m ? esc(m.notes || '') : ''}</textarea></label>
-    <div id="preview" class="preview" aria-live="polite"></div><div class="err" id="ferr"></div>
+    <datalist id="dl-reason">${REASONS.map(x => `<option value="${esc(x)}">`).join('')}</datalist><datalist id="dl-place">${uniqueVals('place').map(x => `<option value="${esc(x)}">`).join('')}</datalist><datalist id="dl-doctor">${uniqueVals('doctor').map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+    <div class="err" id="ferr"></div>
     <div class="actions"><button class="btn primary" type="submit">Guardar control</button>${m ? '<button type="button" class="btn danger" data-act="ask-del">Eliminar</button>' : ''}</div></form>`);
   const f = $('#f-control', w); updatePreview(f);
   f.addEventListener('input', () => updatePreview(f));
@@ -1092,8 +1120,8 @@ function openVisit(id) {
 function csvQuote(s) { return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCSV() {
   const p = S.profile || {}, cm = (v, u, d) => v == null ? '' : csvQuote(fmt(v, d) + ' ' + u);
-  const rows = [`(N) Nombre,${csvQuote(p.name || '')},,,`, `(B) Fecha de nacimiento,${p.birth || ''},,,`, '(G) Sexo,F,,,', '(P) Foto,,,,', ',,,,', 'Fecha,Peso,Estatura,Circunferencia de la cabeza,Notas']
-    .concat(sortedM().map(m => [m.date, cm(m.weight, 'kg', 3), cm(m.height, 'cm', 1), cm(m.head, 'cm', 1), csvQuote(m.notes || '')].join(',')));
+  const rows = [`(N) Nombre,${csvQuote(p.name || '')},,,`, `(B) Fecha de nacimiento,${p.birth || ''},,,`, '(G) Sexo,F,,,', '(P) Foto,,,,', ',,,,', 'Fecha,Peso,Estatura,Circunferencia de la cabeza,Notas,Motivo,Establecimiento,Doctor']
+    .concat(sortedM().map(m => [m.date, cm(m.weight, 'kg', 3), cm(m.height, 'cm', 1), cm(m.head, 'cm', 1), csvQuote(m.notes || ''), csvQuote(m.reason || ''), csvQuote(m.place || ''), csvQuote(m.doctor || '')].join(',')));
   return rows.join('\n') + '\n';
 }
 async function saveFile(name, data) {
@@ -1126,7 +1154,7 @@ async function importText(text) {
   for (const r of rows) {
     const k = (r[0] || '').trim();
     if (/^\(N\)/.test(k)) name = fixMoji((r[1] || '').trim()); else if (/^\(B\)/.test(k)) bd = (r[1] || '').trim(); else if (/^fecha$/i.test(k)) inTable = true;
-    else if (inTable && /^\d{4}-\d{2}-\d{2}$/.test(k)) list.push({date: k, weight: num(r[1]), height: num(r[2]), head: num(r[3]), notes: fixMoji((r[4] || '').trim())});
+    else if (inTable && /^\d{4}-\d{2}-\d{2}$/.test(k)) { const o = {date: k, weight: num(r[1]), height: num(r[2]), head: num(r[3]), notes: fixMoji((r[4] || '').trim())}; if (r.length > 5) { o.reason = fixMoji((r[5] || '').trim()); o.place = fixMoji((r[6] || '').trim()); o.doctor = fixMoji((r[7] || '').trim()); } list.push(o); }
   }
   if (!list.length) { toast('No encontré controles en ese archivo.'); return; }
   if (!S.profile && bd) { S.profile = {name: name || '', birth: bd, sex: 'F'}; if (DB) await dbSet('profile/main', S.profile); }
