@@ -639,6 +639,12 @@ function readoutHTML(ind, p) {
   <div class="ro-sub">Percentil ${pctText(p.p)}, z = ${fixed(p.z, 2)}${ind.kind === 'len' ? `, para ${fmt(p.x, 1)} cm de ${p.age < 24 ? 'longitud' : 'estatura'}` : ''}</div>
   <span class="pill tone-${zn.tone}">${zn.label}</span></div>`;
 }
+function ensureRangeFor(date) {
+  const b = birth(); if (!b) return;
+  const a = ageMonths(b, date), c = S.chart, ind = INDX[c.ind];
+  if (ind.kind === 'len') { if ((c.range === '0-2') !== (a < 24)) c.range = a < 24 ? '0-2' : '2-5'; }
+  else { const r = RANGES[c.range] || [0, 60]; if (a < r[0] || a > r[1]) c.range = '0-5'; }
+}
 function selectPoint(id) {
   if (!chartMeta) return;
   const p = chartMeta.pts.find(q => q.id === id); S.chart.sel = id;
@@ -987,7 +993,8 @@ function openControl(id) {
     if (v.height != null && (v.height < 30 || v.height > 130)) { er.textContent = 'La talla debe estar entre 30 y 130 cm.'; return; }
     if (v.head != null && (v.head < 25 || v.head > 60)) { er.textContent = 'El perímetro de la cabeza debe estar entre 25 y 60 cm.'; return; }
     if (b && v.date < b) { er.textContent = 'La fecha es anterior al nacimiento.'; return; }
-    closeSheet(); S._keepScroll = true; saveDoc('measurements', Object.assign({id: m ? m.id : uid('m')}, v)); toast('Control guardado');
+    const nid = m ? m.id : uid('m'); S.chart.sel = nid; ensureRangeFor(v.date);
+    closeSheet(); S._keepScroll = true; saveDoc('measurements', Object.assign({id: nid}, v)); toast('Control guardado');
   });
   const del = $('[data-act="ask-del"]', w);
   if (del) del.addEventListener('click', () => askDelete(del, '¿Eliminar este control?', () => { delDoc('measurements', m.id); toast('Control eliminado'); }), {once: true});
@@ -1136,7 +1143,7 @@ document.addEventListener('click', ev => {
   const el = ev.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act;
   switch (a) {
-    case 'tab': S.tab = el.dataset.tab; window.scrollTo(0, 0); render(); break;
+    case 'tab': S.tab = el.dataset.tab; if (S.tab === 'curvas') S.chart.sel = null; window.scrollTo(0, 0); render(); break;
     case 'close': closeSheet(); break;
     case 'login': loginGoogle(); break;
     case 'logout': logout(); break;
